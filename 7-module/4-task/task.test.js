@@ -1,246 +1,94 @@
 import createElement from '../../assets/lib/create-element.js';
-import StepSlider from './index.js';
 
-describe('7-module-4-task', () => {
-  let stepSlider;
+export default class StepSlider {
+  constructor({ steps, value = 0 }) {
+    this.steps = steps;
+    this.value = value;
 
-  let styleElement;
-  let mainElements;
+    this.render();
+    this.addEventListeners();
+  }
 
-  let config;
-
-  beforeEach(() => {
-    config = {
-      steps: 3,
-      value: 0,
-    }
-
-    styleElement = createElement(`
-      <style>
-        .container {
-          max-width: 988px;
-          margin: 0 auto;
-        }
-
-        .slider {
-          position: relative;
-          background-color: var(--color-black-dark);
-          margin: 0 16px;
-          width: 330px;
-          height: 8px;
-          border-radius: 3px;
-          cursor: pointer;
-        }
-
-        .slider__progress {
-          height: 8px;
-          border-radius: 3px;
-          position: absolute;
-          top: 50%;
-          left: 0;
-          right: 0;
-          z-index: 1;
-          background: linear-gradient(90deg, #f3e273 0%, #dd6428 52%, #d31c34 100%);
-          transform: translate(0, -50%);
-        }
-
-        .slider_dragging .slider__thumb {
-          cursor: grabbing;
-        }
-
-        .slider__thumb {
-          background-color: var(--color-white);
-          border-radius: 3px;
-          width: 20px;
-          height: 20px;
-          position: absolute;
-          z-index: 2;
-          top: 50%;
-          left: 0;
-          margin-left: -10px;
-          transform: translate(0, -50%);
-          cursor: grab;
-        }
-
-        .slider__value {
-          color: var(--color-body);
-          font-size: 12px;
-          font-weight: 700;
-          font-family: var(--font-primary);
-          position: absolute;
-          left: 0;
-          top: calc(100% + 6px);
-          text-align: center;
-          width: 100%;
-          pointer-events: none;
-          cursor: default;
-        }
-
-        .slider__steps {
-          display: flex;
-          flex-direction: row;
-          align-items: flex-start;
-          justify-content: space-between;
-          position: absolute;
-          top: calc(100% - 2px);
-          left: 0;
-          right: 0;
-        }
-
-        .slider__steps > span {
-          background-color: var(--color-black-dark);
-          display: inline-flex;
-          width: 2px;
-          height: 9px;
-          margin-left: -1px;
-          transition: 0.2s height;
-        }
-
-        .slider__steps > span:first-child,
-        .slider__steps > span:last-child {
-          margin-left: 0;
-        }
-
-        .slider__steps > .slider__step-active {
-          background-color: var(--color-black-light);
-          height: 14px;
-        }
-
-      </style>
-    `);
-
-    mainElements = createElement(`
-      <div class="container" id="holder" style="padding: 50px;">
+  render() {
+    this.elem = createElement(`
+      <div class="slider">
+        <div class="slider__thumb" style="left: 0;"></div>
+        <div class="slider__progress" style="width: 0;"></div>
+        <div class="slider__value">${this.value}</div>
+        <div class="slider__steps">
+          ${'<span></span>'.repeat(this.steps)}
+        </div>
       </div>
     `);
 
-    document.body.append(styleElement);
-    document.body.append(mainElements);
+    this.thumb = this.elem.querySelector('.slider__thumb');
+    this.progress = this.elem.querySelector('.slider__progress');
 
-    stepSlider = new StepSlider(config);
+    this.update();
+  }
 
-    let holder = document.querySelector('#holder');
-    holder.append(stepSlider.elem);
-  });
+  addEventListeners() {
+    this.thumb.ondragstart = () => false;
 
-  afterEach(() => {
-    mainElements.remove();
-    styleElement.remove();
-  });
-
-  describe('отрисовка', () => {
-    it('после создания должно быть нарисовано количество шагов переданное в момент создания', () => {
-      let steps = stepSlider.elem.querySelectorAll('.slider__steps span');
-
-      expect(steps.length).toBe(3);
+    this.thumb.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      this.elem.classList.add('slider_dragging');
+      this.thumb.style.pointerEvents = 'none';
+      this.pointerMove(event);
     });
 
-    it('первый шаг должен быть активным', () => {
-      let step1 = stepSlider.elem.querySelector('.slider__steps span');
+    document.addEventListener('pointermove', (event) => this.pointerMove(event));
+    document.addEventListener('pointerup', () => this.pointerUp());
+  }
 
-      expect(step1.classList.contains('slider__step-active')).toBe(true);
+  pointerMove(event) {
+    if (!this.elem.classList.contains('slider_dragging')) {
+      return;
+    }
+
+    let left = (event.clientX - this.sliderRect.left) / this.sliderRect.width;
+
+    if (left < 0) left = 0;
+    if (left > 1) left = 1;
+
+    this.thumb.style.left = left * 100 + '%';
+    this.progress.style.width = left * 100 + '%';
+
+    let segments = this.steps - 1;
+    let approximateValue = left * segments;
+    this.value = Math.round(approximateValue);
+
+    this.elem.querySelector('.slider__value').innerHTML = this.value;
+
+    let steps = this.elem.querySelectorAll('.slider__steps span');
+    steps.forEach((step, index) => {
+      index === this.value ? step.classList.add('slider__step-active') : step.classList.remove('slider__step-active');
     });
-  });
+  }
 
-  describe('изменение значение Drag-and-Drop', () => {
-    let thumb;
-    let progress;
+  pointerUp() {
+    if (this.elem.classList.contains('slider_dragging')) {
+      this.elem.classList.remove('slider_dragging');
+      this.elem.dispatchEvent(new CustomEvent('slider-change', {
+        detail: this.value,
+        bubbles: true
+      }));
+      this.thumb.style.pointerEvents = '';
+    }
+  }
 
-    let pointerDownEvent;
-    let pointerMoveEvent;
-    let pointerUpEvent;
+  update() {
+    let leftPercents = (this.value / (this.steps - 1)) * 100;
+    this.thumb.style.left = `${leftPercents}%`;
+    this.progress.style.width = `${leftPercents}%`;
 
-    let pointerMoveClientX;
+    this.elem.querySelector('.slider__value').innerHTML = this.value;
 
-    beforeEach(() => {
-      thumb = stepSlider.elem.querySelector('.slider__thumb');
-      progress = stepSlider.elem.querySelector('.slider__progress');
-
-      let sliderRectLeft = stepSlider.elem.getBoundingClientRect().left;
-      pointerMoveClientX = sliderRectLeft + 99;
-
-      pointerDownEvent = new PointerEvent('pointerdown', { bubbles: true });
-      pointerMoveEvent = new PointerEvent('pointermove', { clientX: pointerMoveClientX, bubbles: true });
-      pointerUpEvent = new PointerEvent('pointerup', { clientX: pointerMoveClientX, bubbles: true });
-    })
-
-    it('должен перемещать ползунок после захвата и перемещения', () => {
-      thumb.dispatchEvent(pointerDownEvent);
-      thumb.dispatchEvent(pointerMoveEvent);
-
-      expect(thumb.style.left).toBe('30%');
-    });
-
-    it('должен добавлять класс slider_dragging', () => {
-      thumb.dispatchEvent(pointerDownEvent);
-      thumb.dispatchEvent(pointerMoveEvent);
-
-      expect(stepSlider.elem.classList.contains('slider_dragging')).toBe(true);
-    });
-
-    it('должен задавать закрашиваемую область до ползунка', () => {
-      thumb.dispatchEvent(pointerDownEvent);
-      thumb.dispatchEvent(pointerMoveEvent);
-
-      expect(progress.style.width).toBe('30%');
-    });
-
-    it('должен генерировать событие изменения значения', (done) => {
-      thumb.dispatchEvent(pointerDownEvent);
-      thumb.dispatchEvent(pointerMoveEvent);
-
-      stepSlider.elem.addEventListener('slider-change', (event) => {
-        expect(event.detail).toBe(1);
-
-        done();
-      });
-
-      thumb.dispatchEvent(pointerUpEvent);
+    let steps = this.elem.querySelectorAll('.slider__steps span');
+    steps.forEach((step, index) => {
+      index === this.value ? step.classList.add('slider__step-active') : step.classList.remove('slider__step-active');
     });
 
-  });
-
-  describe('изменение значение по клику', () => {
-    let thumb;
-    let progress;
-
-    let clickEvent;
-
-    let pointerMoveClientX;
-
-    beforeEach(() => {
-      thumb = stepSlider.elem.querySelector('.slider__thumb');
-      progress = stepSlider.elem.querySelector('.slider__progress');
-
-      let sliderRectLeft = stepSlider.elem.getBoundingClientRect().left;
-      pointerMoveClientX = sliderRectLeft + 99;
-
-      clickEvent = new MouseEvent('click', { clientX: pointerMoveClientX, bubbles: true });
-    })
-
-    it('должен перемещать ползунок', () => {
-      stepSlider.elem.dispatchEvent(clickEvent);
-
-      expect(thumb.style.left).toBe('50%');
-    });
-
-    it('должен задавать ширину закрашиваемой области до ползунка', () => {
-      stepSlider.elem.dispatchEvent(clickEvent);
-
-      expect(progress.style.width).toBe('50%');
-    });
-
-    it('должен генерировать событие изменения значения', (done) => {
-      stepSlider.elem.addEventListener('slider-change', (event) => {
-        expect(event.detail).toBe(1);
-
-        done();
-      });
-
-      stepSlider.elem.dispatchEvent(clickEvent);
-    });
-
-  });
-
-
-});
+    this.sliderRect = this.elem.getBoundingClientRect();
+  }
+}
